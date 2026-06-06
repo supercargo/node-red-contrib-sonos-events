@@ -27,12 +27,16 @@
       },
       outputs: {
         value: 2
+      },
+      refreshSeconds: {
+        value: 60,
+        validate: RED.validators.number()
       }
     },
     outputLabels: function (i) {
       return this.events[i].fullName
     },
-    inputs: 0, // set the number of inputs - only 0 or 1
+    inputs: 1, // set the number of inputs - only 0 or 1 (input forces re-subscribe)
     icon: 'sonos.png', // saved in icons/myicon.png
     color: '#FDD4AA',
     paletteLabel: 'events',
@@ -205,6 +209,16 @@
 <div class="form-row">
   <input type="hidden" id="node-input-outputs" />
 </div>
+
+<!-- Refresh / re-subscribe interval -->
+<div class="form-row">
+  <label for="node-input-refreshSeconds" style="width: 30%;"><i class="fa fa-refresh"></i> Refresh (s)</label>
+  <input type="number" id="node-input-refreshSeconds" placeholder="60" style="width: 80px;">
+</div>
+<div class="form-tips">
+  <b>Refresh</b>: how often (seconds) to renew the event subscription. A renewal after the
+  player power-cycles forces a fresh re-subscribe, so events resume within this interval.
+</div><br>
 
 <!-- Node name -->
 <div class="form-row">

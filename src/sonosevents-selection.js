@@ -72,19 +72,53 @@ module.exports = function (RED) {
         eventsByServices[serviceName][eventName] = i
       }
 
-      // subscribe and handle errors direct
-      subscribeToMultipleEvents(node, player, eventsByServices)
-        .then((port) => { // success, when handler is successfully established
+      // refresh/retry cadence (seconds); default 60
+      const refreshSeconds = (Number(config.refreshSeconds) > 0) ? Number(config.refreshSeconds) : 60
+      let subscribed = false
+
+      // initial subscribe, retrying until the player is reachable so a SID is
+      // always established (RefreshEventSubscriptions is a no-op without one)
+      async function establishSubscription () {
+        try {
+          const port = await subscribeToMultipleEvents(node, player, eventsByServices)
+          subscribed = true
           node.status({ fill: 'green', shape: 'ring', text: `connected: ${port}` })
           node.debug(`port >>${JSON.stringify(port)}`)
-        })
-        .catch((error) => {
+        } catch (error) {
+          subscribed = false
           node.status({ fill: 'red', shape: 'ring', text: 'disconnected: ' + error.message })
           node.debug(`error subscribe>>${JSON.stringify(error, Object.getOwnPropertyNames(error))}`)
-        })
-      
+          node.retryTimer = setTimeout(establishSubscription, refreshSeconds * 1000)
+        }
+      }
+      establishSubscription()
+
+      // watchdog: renew on a tight interval so a stale SID after a player
+      // power-cycle triggers a fresh re-subscribe within refreshSeconds,
+      // instead of waiting for the library's ~10 min renewal timer
+      node.refreshTimer = setInterval(function () {
+        if (!subscribed) return
+        player.RefreshEventSubscriptions()
+          .catch(error => { node.debug(`refresh subscriptions failed >>${error.message}`) })
+      }, refreshSeconds * 1000)
+
+      // any input message forces an immediate re-subscribe
+      node.on('input', function (msg, send, done) {
+        player.RefreshEventSubscriptions()
+          .then(() => {
+            node.status({ fill: 'green', shape: 'dot', text: 'resubscribed' })
+            if (done) done()
+          })
+          .catch(error => {
+            node.status({ fill: 'red', shape: 'ring', text: 'resubscribe failed: ' + error.message })
+            if (done) done(error)
+          })
+      })
+
       // unsubscribe to all, when node is deleted (redeployed does delete)
       node.on('close', function (done) {
+        if (node.refreshTimer) { clearInterval(node.refreshTimer) }
+        if (node.retryTimer) { clearTimeout(node.retryTimer) }
         cancelAllSubscriptions(player, eventsByServices)
           .then(() => {
             debug('nodeOnClose >>all subscriptions canceled')
