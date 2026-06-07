@@ -12,8 +12,13 @@
         type: 'sonosevents-config'
       },
       playerHostname: {
-        value: '',
-        required: true
+        value: ''
+      },
+      playerUuid: {
+        value: ''
+      },
+      playerName: {
+        value: ''
       },
       events: {
         value: [{ fullName: 'AVTransportService.playbackstate' }, { fullName: 'AVTransportService.content' }],
@@ -41,10 +46,38 @@
     color: '#FDD4AA',
     paletteLabel: 'events',
     label: function () {
-      let nodeLabel = this.name || `${this.playerHostname} events`
-      return nodeLabel
+      return this.name || (this.playerName ? `${this.playerName} events` : `${this.playerHostname} events`)
     },
     oneditprepare: function () {
+
+      // zone select (durable uuid). discover and select a zone, or leave empty
+      // to fall back to the IP/hostname field below.
+      const $zone = $('#node-input-playerUuid')
+      $zone.empty()
+      $zone.append($('<option>').val('').text('-- use IP/hostname below --'))
+      if (this.playerUuid) {
+        $zone.append($('<option>').val(this.playerUuid).attr('data-playername', this.playerName || '').text(this.playerName || this.playerUuid))
+        $zone.val(this.playerUuid)
+      }
+      $zone.on('change', function () {
+        $('#node-input-playerName').val($('#node-input-playerUuid option:selected').attr('data-playername') || '')
+      })
+      $('#node-lookup-zones').click(function () {
+        $('#node-lookup-zones-icon').removeClass('fa-search').addClass('spinner')
+        $.getJSON((RED.settings.httpAdminRoot || '') + 'nrcse/discoverAllZones', function (zones) {
+          $('#node-lookup-zones-icon').removeClass('spinner').addClass('fa-search')
+          const current = $zone.val()
+          $zone.empty()
+          $zone.append($('<option>').val('').text('-- use IP/hostname below --'))
+          $.each(zones, function (i, z) {
+            if (z.value) {
+              $zone.append($('<option>').val(z.value).attr('data-playername', z.playerName || '').text(z.label))
+            }
+          })
+          if (current) { $zone.val(current) }
+          $zone.trigger('change')
+        })
+      })
 
       // playerHostname text field: enter ip or do a discovery and select
       try {
@@ -179,6 +212,18 @@
 <div class="form-tips" id="node-tip-confignode" style="width: auto;">
   <b>Config node</b>: Default name is household. Please use only ONE config node for all nodes.
   Use Node-RED menu item "Configuration Nodes" to remove duplicates.
+</div><br>
+
+<!-- Zone (durable uuid) -->
+<div class="form-row">
+  <label for="node-input-playerUuid" style="width: 30%;"><i class="fa fa-music"></i> Zone</label>
+  <select id="node-input-playerUuid" style="width: 55%;"></select>
+  <button type="button" id="node-lookup-zones" class="red-ui-button"><i id="node-lookup-zones-icon" class="fa fa-search"></i></button>
+</div>
+<input type="hidden" id="node-input-playerName">
+<div class="form-tips">
+  <b>Zone</b> (recommended): address the player by its permanent id so it keeps working
+  after a DHCP/IP change. Click search to discover zones. Leave empty to use the IP/hostname below.
 </div><br>
 
 <!-- SONOS player hostname such such 192.168.178.37-->

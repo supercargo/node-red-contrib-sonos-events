@@ -19,7 +19,7 @@
 
 const { PACKAGE_PREFIX, TIMEOUT_PLAYER_DISCOVERY } = require('./Globals.js')
 
-const { discoverAllPlayerWithHost } = require('./Discovery.js')
+const { discoverAllPlayerWithHost, discoverAllZones } = require('./Discovery.js')
 
 const { getRightCcuIp, getMultipleIps } = require('./Extensions.js')
 
@@ -83,6 +83,20 @@ module.exports = function (RED) {
         })
       break
       
+    case 'discoverAllZones':
+      debug('starting zone discovery')
+      discoverAllZones()
+        .then((zoneList) => { response.json(zoneList) })
+        .catch((error) => {
+          if (isTruthyProperty(error, ['message']) && error.message === TIMEOUT_PLAYER_DISCOVERY) {
+            response.json([{ 'label': 'no players found', 'value': '' }])
+            return
+          }
+          debug('error zone discovery >>%s', JSON.stringify(error, Object.getOwnPropertyNames(error)))
+          response.json([])
+        })
+      break
+
     case 'getIp':
       getRightCcuIp(0)
         .then((ipList) => {
